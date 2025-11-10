@@ -1,0 +1,15 @@
+info:
+  version: 1.0.0
+  description: NF Profile Cache Function
+
+server:
+  bindAddr: 0.0.0.0:8000
+
+nrf:
+  url: http://nrf:8000
+
+cache:
+  ttl: 300000000000
+
+logger:
+  level: info
