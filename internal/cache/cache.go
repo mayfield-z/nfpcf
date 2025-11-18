@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"net/url"
 	"sync"
 	"time"
@@ -13,20 +14,27 @@ type CacheEntry struct {
 	ExpiresAt time.Time
 }
 
+type SearchResultEntry struct {
+	Result    *models.SearchResult
+	ExpiresAt time.Time
+}
+
 type NFProfileCache struct {
-	profiles     map[string]*CacheEntry
-	typeIndex    map[string][]string
-	lock         sync.RWMutex
-	defaultTTL   time.Duration
-	cleanupTimer *time.Ticker
+	profiles       map[string]*CacheEntry
+	typeIndex      map[string][]string
+	searchResults  map[string]*SearchResultEntry
+	lock           sync.RWMutex
+	defaultTTL     time.Duration
+	cleanupTimer   *time.Ticker
 }
 
 func NewNFProfileCache(ttl time.Duration) *NFProfileCache {
 	cache := &NFProfileCache{
-		profiles:     make(map[string]*CacheEntry),
-		typeIndex:    make(map[string][]string),
-		defaultTTL:   ttl,
-		cleanupTimer: time.NewTicker(ttl / 2),
+		profiles:      make(map[string]*CacheEntry),
+		typeIndex:     make(map[string][]string),
+		searchResults: make(map[string]*SearchResultEntry),
+		defaultTTL:    ttl,
+		cleanupTimer:  time.NewTicker(ttl / 2),
 	}
 
 	go cache.cleanupExpired()
@@ -207,6 +215,41 @@ func (c *NFProfileCache) removeFromTypeIndex(nfType string, nfInstanceID string)
 	}
 }
 
+func (c *NFProfileCache) GetSearchResult(queryParams url.Values) (*models.SearchResult, bool) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	key := generateSearchKey(queryParams)
+	entry, exists := c.searchResults[key]
+	if !exists {
+		return nil, false
+	}
+
+	if time.Now().After(entry.ExpiresAt) {
+		return nil, false
+	}
+
+	return entry.Result, true
+}
+
+func (c *NFProfileCache) SetSearchResult(queryParams url.Values, result *models.SearchResult) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	key := generateSearchKey(queryParams)
+	entry := &SearchResultEntry{
+		Result:    result,
+		ExpiresAt: time.Now().Add(c.defaultTTL),
+	}
+	c.searchResults[key] = entry
+}
+
+func generateSearchKey(queryParams url.Values) string {
+	targetNfType := queryParams.Get("target-nf-type")
+	requesterNfType := queryParams.Get("requester-nf-type")
+	return fmt.Sprintf("%s:%s", targetNfType, requesterNfType)
+}
+
 func (c *NFProfileCache) cleanupExpired() {
 	for range c.cleanupTimer.C {
 		c.lock.Lock()
@@ -217,6 +260,11 @@ func (c *NFProfileCache) cleanupExpired() {
 					c.removeFromTypeIndex(string(entry.Profile.NfType), id)
 				}
 				delete(c.profiles, id)
+			}
+		}
+		for key, entry := range c.searchResults {
+			if now.After(entry.ExpiresAt) {
+				delete(c.searchResults, key)
 			}
 		}
 		c.lock.Unlock()

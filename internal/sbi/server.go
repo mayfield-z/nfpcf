@@ -5,12 +5,13 @@ import (
 	"net/http"
 
 	"github.com/free5gc/nfpcf/internal/sbi/processor"
-	"github.com/gin-gonic/gin"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 type Server struct {
 	httpServer *http.Server
-	router     *gin.Engine
+	mux        *http.ServeMux
 	processor  *processor.Processor
 	bindAddr   string
 }
@@ -19,20 +20,24 @@ func NewServer(processor *processor.Processor, bindAddr string) *Server {
 	s := &Server{
 		processor: processor,
 		bindAddr:  bindAddr,
+		mux:       http.NewServeMux(),
 	}
 
-	s.router = s.setupRoutes()
+	s.setupRoutes()
+
+	h2s := &http2.Server{}
+	handler := h2c.NewHandler(s.mux, h2s)
 
 	s.httpServer = &http.Server{
 		Addr:    bindAddr,
-		Handler: s.router,
+		Handler: handler,
 	}
 
 	return s
 }
 
 func (s *Server) Run() error {
-	fmt.Printf("NFPCF server listening on %s\n", s.bindAddr)
+	fmt.Printf("NFPCF server listening on %s (HTTP/2 cleartext)\n", s.bindAddr)
 	return s.httpServer.ListenAndServe()
 }
 

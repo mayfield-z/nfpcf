@@ -16,3 +16,11 @@ func NewProcessor(cache *cache.NFProfileCache, nrfClient *consumer.NRFClient) *P
 		nrfClient: nrfClient,
 	}
 }
+
+func (p *Processor) GetCache() *cache.NFProfileCache {
+	return p.cache
+}
+
+func (p *Processor) GetNRFClient() *consumer.NRFClient {
+	return p.nrfClient
+}
