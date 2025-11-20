@@ -37,6 +37,8 @@ func (s *Server) handleRegisterNFInstance(w http.ResponseWriter, r *http.Request
 	}
 
 	if profile != nil {
+		// Add Location header as per TS 29.510
+		w.Header().Set("Location", fmt.Sprintf("/nnrf-nfm/v1/nf-instances/%s", profile.NfInstanceId))
 		sendJSON(w, http.StatusCreated, profile)
 		return
 	}
