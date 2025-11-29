@@ -112,6 +112,13 @@ func (s *Server) handleDiscoverNFInstances(w http.ResponseWriter, r *http.Reques
 	targetNfType := queryParams.Get("target-nf-type")
 	requesterNfType := queryParams.Get("requester-nf-type")
 
+	// Health check: if no parameters provided, return OK
+	if targetNfType == "" && requesterNfType == "" && len(queryParams) == 0 {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"healthy"}`))
+		return
+	}
+
 	if targetNfType == "" || requesterNfType == "" {
 		sendProblemDetails(w, http.StatusBadRequest, "Loss mandatory parameter", "")
 		return
